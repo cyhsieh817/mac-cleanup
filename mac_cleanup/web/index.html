@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mac-cleanup</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+    --radius: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  header { text-align: center; margin-bottom: 32px; }
+  header h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+  header p { color: var(--text2); font-size: 14px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 20px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-danger { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn-danger:hover { opacity: 0.9; }
+
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; justify-content: center; }
+  .pill {
+    padding: 6px 14px; border-radius: 20px; font-size: 13px;
+    border: 1px solid var(--border); background: var(--surface);
+    cursor: pointer; user-select: none; transition: all 0.15s;
+  }
+  .pill.active { border-color: var(--accent); background: rgba(88,166,255,0.1); color: var(--accent); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  }
+  .card h3 { font-size: 15px; margin-bottom: 12px; color: var(--text2); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 10px; color: var(--text2); border-bottom: 1px solid var(--border); font-weight: 500; }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(48,54,61,0.5); }
+  tr:hover td { background: rgba(88,166,255,0.04); }
+  .size { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .path { color: var(--text2); font-size: 12px; word-break: break-all; }
+  input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+  .action-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    margin: 16px 0; position: sticky; bottom: 16px;
+  }
+  .action-bar .info { font-size: 14px; }
+  .action-bar .info strong { color: var(--accent); }
+
+  .progress-wrap { margin: 16px 0; }
+  .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.3s ease; }
+  .progress-text { font-size: 13px; color: var(--text2); margin-top: 6px; }
+
+  .status-msg { text-align: center; padding: 40px; color: var(--text2); font-size: 14px; }
+  .status-msg .icon { font-size: 48px; margin-bottom: 12px; display: block; }
+
+  .result { text-align: center; padding: 24px; }
+  .result .big { font-size: 36px; font-weight: 700; color: var(--green); }
+  .result .label { color: var(--text2); font-size: 14px; margin-top: 4px; }
+
+  .scan-area { text-align: center; margin: 24px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header><h1>mac-cleanup</h1><p>macOS Development Environment Cleanup Tool</p></header>
+  <div class="scan-area" id="scanArea">
+    <div class="pills" id="catPills"></div>
+    <button class="btn btn-primary" id="scanBtn" onclick="startScan()">Scan</button>
+  </div>
+  <div id="statusSection" style="display:none"></div>
+  <div id="resultsSection" style="display:none"></div>
+  <div class="action-bar" id="actionBar" style="display:none">
+    <div class="info">Selected: <strong id="selectedCount">0</strong> items (<strong id="selectedSize">0 KB</strong>)</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="toggleAll()">Toggle All</button>
+      <button class="btn btn-danger" id="cleanBtn" onclick="startClean()">Clean Selected</button>
+    </div>
+  </div>
+  <div id="progressSection" style="display:none"></div>
+  <div id="doneSection" style="display:none"></div>
+</div>
+
+<script>
+const API = '';
+let categories = {};
+let report = null;
+let allChecked = true;
+
+// ── DOM helpers (no innerHTML with dynamic data) ───────
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (k === 'checked') e.checked = v;
+    else e.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (typeof c === 'string') e.appendChild(document.createTextNode(c));
+    else if (c) e.appendChild(c);
+  }
+  return e;
+}
+
+function clear(id) { const e = document.getElementById(id); while (e.firstChild) e.removeChild(e.firstChild); }
+function show(...ids) { ids.forEach(id => { const e = document.getElementById(id); if(e) e.style.display = ''; }); }
+function hide(...ids) { ids.forEach(id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; }); }
+
+function fmt(kb) {
+  if (kb < 1024) return kb + ' KB';
+  if (kb < 1024*1024) return (kb/1024).toFixed(1) + ' MB';
+  return (kb/1024/1024).toFixed(1) + ' GB';
+}
+
+// ── Init: load categories ──────────────────────────────
+
+(async () => {
+  const res = await fetch(API + '/api/categories');
+  categories = await res.json();
+  const pills = document.getElementById('catPills');
+  for (const [key, name] of Object.entries(categories)) {
+    const pill = el('span', {class: 'pill active', 'data-key': key, onclick: (e) => e.target.classList.toggle('active')}, name);
+    pills.appendChild(pill);
+  }
+})();
+
+function getSelectedCats() {
+  return [...document.querySelectorAll('.pill.active')].map(el => el.dataset.key);
+}
+
+// ── Scan ────────────────────────────────────────────────
+
+async function startScan() {
+  const cats = getSelectedCats();
+  hide('resultsSection', 'actionBar', 'doneSection');
+  show('statusSection');
+
+  const sec = document.getElementById('statusSection');
+  clear('statusSection');
+  sec.appendChild(el('div', {class: 'status-msg'},
+    el('span', {class: 'icon'}, '\uD83D\uDD0D'),
+    'Scanning your system...'
+  ));
+  document.getElementById('scanBtn').disabled = true;
+
+  await fetch(API + '/api/scan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({categories: cats})
+  });
+
+  const poll = setInterval(async () => {
+    const st = await (await fetch(API + '/api/status')).json();
+    if (st.status === 'idle') {
+      clearInterval(poll);
+      await loadReport();
+    }
+  }, 500);
+}
+
+async function loadReport() {
+  const res = await fetch(API + '/api/report');
+  report = await res.json();
+  document.getElementById('scanBtn').disabled = false;
+
+  if (!report || !report.items.length) {
+    const sec = document.getElementById('statusSection');
+    clear('statusSection');
+    sec.appendChild(el('div', {class: 'status-msg'},
+      el('span', {class: 'icon'}, '\u2728'),
+      'Your system is clean! Nothing to remove.'
+    ));
+    return;
+  }
+
+  hide('statusSection');
+  renderResults(report);
+  show('resultsSection', 'actionBar');
+  updateSelection();
+}
+
+// ── Render results using DOM API ────────────────────────
+
+function renderResults(rpt) {
+  const section = document.getElementById('resultsSection');
+  clear('resultsSection');
+
+  const groups = {};
+  for (const item of rpt.items) {
+    (groups[item.category] = groups[item.category] || []).push(item);
+  }
+
+  for (const [cat, items] of Object.entries(groups)) {
+    const catName = categories[cat] || cat;
+    const catSize = items.reduce((s, i) => s + i.size_kb, 0);
+
+    const card = el('div', {class: 'card'});
+    card.appendChild(el('h3', null, catName + ' \u2014 ' + fmt(catSize)));
+
+    const table = el('table');
+    const thead = el('thead');
+    const catCb = el('input', {type: 'checkbox', checked: true, onchange: (e) => toggleCat(cat, e.target.checked)});
+    thead.appendChild(el('tr', null,
+      el('th', {style: 'width:32px'}, catCb),
+      el('th', null, 'Name'),
+      el('th', {class: 'size'}, 'Size')
+    ));
+    table.appendChild(thead);
+
+    const tbody = el('tbody');
+    for (const item of items) {
+      const cb = el('input', {type: 'checkbox', checked: true, class: 'item-cb', 'data-path': item.path, 'data-size': String(item.size_kb), 'data-cat': cat, onchange: updateSelection});
+
+      const nameCell = el('td');
+      nameCell.appendChild(document.createTextNode(item.name));
+      if (item.description) {
+        nameCell.appendChild(el('br'));
+        nameCell.appendChild(el('span', {class: 'path'}, item.description));
+      }
+      nameCell.appendChild(el('br'));
+      nameCell.appendChild(el('span', {class: 'path'}, item.path));
+
+      const sizeCell = el('td', {class: 'size'}, item.size_kb ? fmt(item.size_kb) : 'N/A');
+
+      tbody.appendChild(el('tr', null, el('td', null, cb), nameCell, sizeCell));
+    }
+    table.appendChild(tbody);
+    card.appendChild(table);
+    section.appendChild(card);
+  }
+}
+
+function toggleCat(cat, checked) {
+  document.querySelectorAll('.item-cb[data-cat="' + cat + '"]').forEach(cb => cb.checked = checked);
+  updateSelection();
+}
+
+function toggleAll() {
+  allChecked = !allChecked;
+  document.querySelectorAll('.item-cb').forEach(cb => cb.checked = allChecked);
+  document.querySelectorAll('th input[type="checkbox"]').forEach(cb => cb.checked = allChecked);
+  updateSelection();
+}
+
+function updateSelection() {
+  const cbs = [...document.querySelectorAll('.item-cb:checked')];
+  const count = cbs.length;
+  const size = cbs.reduce((s, cb) => s + parseInt(cb.dataset.size || 0), 0);
+  document.getElementById('selectedCount').textContent = count;
+  document.getElementById('selectedSize').textContent = fmt(size);
+  document.getElementById('cleanBtn').disabled = count === 0;
+}
+
+// ── Clean ───────────────────────────────────────────────
+
+async function startClean() {
+  const paths = [...document.querySelectorAll('.item-cb:checked')].map(cb => cb.dataset.path);
+  if (!paths.length) return;
+  if (!confirm('Clean ' + paths.length + ' items? This cannot be undone.')) return;
+
+  hide('resultsSection', 'actionBar', 'scanArea');
+  show('progressSection');
+
+  clear('progressSection');
+  const card = el('div', {class: 'card'});
+  const wrap = el('div', {class: 'progress-wrap'});
+  const bar = el('div', {class: 'progress-bar'});
+  const fill = el('div', {class: 'progress-fill', id: 'progressFill'});
+  const text = el('div', {class: 'progress-text', id: 'progressText'}, 'Preparing...');
+  bar.appendChild(fill);
+  wrap.appendChild(bar);
+  wrap.appendChild(text);
+  card.appendChild(wrap);
+  document.getElementById('progressSection').appendChild(card);
+
+  await fetch(API + '/api/clean', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({paths, dry_run: false})
+  });
+
+  const poll = setInterval(async () => {
+    const st = await (await fetch(API + '/api/status')).json();
+    const pct = st.total ? Math.round((st.progress / st.total) * 100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressText').textContent = st.message + ' (' + st.progress + '/' + st.total + ')';
+
+    if (st.status === 'done') {
+      clearInterval(poll);
+      showDone(st.result);
+    }
+  }, 400);
+}
+
+function showDone(result) {
+  hide('progressSection');
+  show('doneSection', 'scanArea');
+
+  const sec = document.getElementById('doneSection');
+  clear('doneSection');
+
+  const card = el('div', {class: 'card result'});
+  card.appendChild(el('div', {class: 'big'}, fmt(result.freed_kb || 0)));
+  card.appendChild(el('div', {class: 'label'}, 'space freed'));
+
+  const info = el('p', {style: 'margin-top:16px;color:var(--text2);font-size:13px'},
+    (result.cleaned || 0) + ' items cleaned'
+  );
+  if (result.log_path) {
+    info.appendChild(el('br'));
+    info.appendChild(document.createTextNode('Audit log: ' + result.log_path));
+  }
+  card.appendChild(info);
+
+  const again = el('button', {class: 'btn', style: 'margin-top:16px', onclick: () => location.reload()}, 'Scan Again');
+  card.appendChild(again);
+  sec.appendChild(card);
+}
+</script>
+</body>
+</html>

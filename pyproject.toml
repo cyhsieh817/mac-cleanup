@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mac-cleanup"
+version = "1.0.0"
+description = "macOS development environment cleanup tool"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "CYHsieh" }]
+keywords = ["macos", "cleanup", "disk-space", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+mac-cleanup = "mac_cleanup.cli:main"
+
+[project.urls]
+Repository = "https://github.com/user/mac-cleanup"
+
+[tool.setuptools.packages.find]
+include = ["mac_cleanup*"]
+
+[tool.setuptools.package-data]
+mac_cleanup = ["web/*.html"]
