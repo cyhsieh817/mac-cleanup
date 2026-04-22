@@ -2,6 +2,12 @@
 
 A fast, zero-dependency macOS cleanup tool for developers. Scans and removes development artifacts, package caches, build outputs, and system junk — via CLI or a desktop web UI.
 
+> **🪦 Companion: [VoidSweep](voidsweep/) (Rust GUI)** — native macOS app for the
+> agent rename-instead-of-rm workflow. Two tabs: **_DELETE_ Sweep** (find and
+> review files prefixed `_DELETE_`) and **Cache Cleanup** (the same registry
+> this Python tool uses, in a visual table). Move-to-Trash by default,
+> Permanent delete behind a confirm modal. `cd voidsweep && cargo run --release`.
+
 ## Features
 
 - **Scan mode** — see what's eating your disk before cleaning anything
